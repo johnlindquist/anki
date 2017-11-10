@@ -1,0 +1,16 @@
+{
+  "name": "create-next-example-app",
+  "scripts": {
+    "dev": "next",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^4.1.4",
+    "react": "^16.1.0",
+    "react-dom": "^16.1.0",
+    "recompose": "^0.26.0",
+    "rxjs": "^5.5.2",
+    "universal-rxjs-ajax": "^1.1.1"
+  }
+}
