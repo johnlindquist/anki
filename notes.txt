@@ -1,0 +1,24 @@
+(
+    <div>
+      {isFlipped ? (
+        <div>
+          <div>{card.answer}</div>
+
+          <button onClick={onNext}>Fail</button>
+          <button onClick={onNext}>Hard</button>
+          <button onClick={onNext}>Good</button>
+          <button onClick={onNext}>Easy</button>
+        </div>
+      ) : (
+        <div>
+          <h1>Anki</h1>
+
+          <div>{state.message}</div>
+          <div>{card.question}</div>
+
+          <button onClick={onFlip}>Flip</button>
+          <button onClick={onChange}>Change</button>
+        </div>
+      )}
+    </div>
+  )

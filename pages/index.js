@@ -4,81 +4,75 @@ import {
   setObservableConfig,
   createEventHandler
 } from "recompose"
+
 import config from "recompose/rxjsObservableConfig"
 import { Observable } from "rxjs/Observable"
 import { request } from "universal-rxjs-ajax"
+import { BehaviorSubject } from "rxjs/BehaviorSubject"
 
 setObservableConfig(config)
 
 const DATA_URL = "https://anki-data-tlwgdmrzkr.now.sh/cards"
 
-const anki = mapPropsStream(props$ => {
-  const {
-    handler: onFlip,
-    stream: onFlip$
-  } = createEventHandler()
+const state = {
+  cards: [],
+  current: 0,
+  message: "hello"
+}
+const store$ = new BehaviorSubject(
+  state
+).scan((state, fn) => fn(state))
 
-  const {
-    handler: onNext,
-    stream: onNext$
-  } = createEventHandler()
+const {
+  handler: onChange,
+  stream: onChange$
+} = createEventHandler()
 
-  const current$ = onNext$
-    .mapTo(1)
-    .scan((acc, curr) => acc + curr)
-    .startWith(0)
+const {
+  handler: onFlip,
+  stream: onFlip$
+} = createEventHandler()
 
-  const flip$ = onFlip$
-    .mapTo(true)
-    .merge(current$.mapTo(false))
-    .startWith(false)
+const {
+  handler: onNext,
+  stream: onNext$
+} = createEventHandler()
 
-  const card = url =>
-    request({ url, method: "GET" })
-      .pluck("response")
-      .combineLatest(current$, (cards, i) => {
-        console.log({ cards, i })
-        return cards[i]
-      })
-      .do(console.log.bind(console))
-      .startWith({
-        slug: "",
-        question: "",
-        answer: ""
-      })
+const cards$ = request({
+  url: DATA_URL,
+  method: "GET"
+}).pluck("response")
 
-  return Observable.combineLatest(
-    props$,
-    card(DATA_URL),
-    flip$,
-    (props, card, isFlipped) => ({
-      ...props,
-      card,
-      isFlipped,
-      onFlip,
-      onNext
-    })
-  )
-})
+const eventMap = [
+  onChange$,
+  onFlip$,
+  onNext$.map(event => state => ({
+    ...state,
+    current: state.current + 1
+  })),
+  cards$.map(cards => state => ({ ...state, cards }))
+]
+
+store$.subscribe(console.log.bind(console))
+
+Observable.merge(...eventMap).subscribe(store$)
+
+const anki = mapPropsStream(props$ =>
+  props$.combineLatest(store$, (props, state) => ({
+    ...props,
+    state,
+    onNext
+  }))
+)
 
 export default anki(
-  ({ card, onFlip, onNext, isFlipped }) => (
+  ({ state, onFlip, onNext, onChange }) => (
     <div>
-      {isFlipped ? (
-        <div>
-          <div>{card.answer}</div>
-          <button onClick={onNext}>Fail</button>
-          <button onClick={onNext}>Hard</button>
-          <button onClick={onNext}>Good</button>
-          <button onClick={onNext}>Easy</button>
-        </div>
-      ) : (
-        <div>
-          <div>{card.question}</div>
-
-          <button onClick={onFlip}>Flip</button>
-        </div>
-      )}
+      <button onClick={onNext}>Next</button>
+      <div>{state.current}</div>
+      <div>
+        {JSON.stringify(state.cards[state.current])}
+      </div>
     </div>
   )
 )

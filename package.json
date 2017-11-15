@@ -3,10 +3,12 @@
   "scripts": {
     "dev": "next",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "deploy": "now && now alias"
   },
   "dependencies": {
     "next": "^4.1.4",
+    "partial.lenses": "^13.1.0",
     "react": "^16.1.0",
     "react-dom": "^16.1.0",
     "recompose": "^0.26.0",
