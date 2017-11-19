@@ -2,8 +2,8 @@ import { store$ } from "../components/store"
 import Head from "../components/head"
 import Link from "next/link"
 import { mapPropsStream } from "recompose"
-import { get, defaults } from "partial.lenses"
-import { map } from "ramda"
+import * as R from "ramda"
+import * as L from "partial.lenses"
 
 const stream$ = mapPropsStream(props$ =>
   props$.combineLatest(store$, (props, state) => {
@@ -14,14 +14,14 @@ const stream$ = mapPropsStream(props$ =>
   })
 )
 
-const displayDeckButtons = map(deck => {
-  const name = get("name", deck)
-  const id = get("id", deck)
+const displayDeckButtons = R.map(deck => {
+  const name = L.get("name", deck)
+  const id = L.get("id", deck)
 
   return (
     <Link
       key={id}
-      href={{ pathname: "/quiz", query: { name } }}
+      href={{ pathname: "/quiz", query: { deck: name } }}
     >
       <a>{name}</a>
     </Link>
@@ -29,9 +29,8 @@ const displayDeckButtons = map(deck => {
 })
 
 const Page = props => {
-  const state = get("state", props)
-  console.log(state)
-  const decks = get(["decks", defaults([])], state)
+  const state = L.get("state", props)
+  const decks = L.get(["decks", L.defaults([])], state)
   return (
     <div>
       <Head />

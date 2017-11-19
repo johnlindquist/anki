@@ -10,44 +10,14 @@ import { Observable } from "rxjs/Observable"
 import { request } from "universal-rxjs-ajax"
 
 import * as L from "partial.lenses"
-import {
-  get,
-  set,
-  elems,
-  index,
-  modify,
-  find,
-  prop,
-  pick,
-  lazy,
-  choose,
-  lens
-} from "partial.lenses"
-import {
-  T,
-  F,
-  converge,
-  compose,
-  inc,
-  always,
-  identity,
-  bind,
-  transduce,
-  juxt,
-  whereEq,
-  nthArg,
-  merge
-} from "ramda"
+import * as R from "ramda"
 
 import supermemo from "../utils/supermemo"
-
-//
-
-console.log(supermemo(5)) //"b"
-
 import { store$, run } from "../components/store"
+import { compareAsc, startOfToday } from "date-fns"
 
-const log = bind(console.log, console)
+const log = R.bind(console.log, console)
+const tapLog = R.tap(log)
 
 const {
   handler: onFlip,
@@ -60,6 +30,11 @@ const {
 } = createEventHandler()
 
 const {
+  handler: onAnswer,
+  stream: onAnswer$
+} = createEventHandler()
+
+const {
   handler: onMaybe,
   stream: onMaybe$
 } = createEventHandler()
@@ -69,31 +44,22 @@ const {
   stream: onTooEasy$
 } = createEventHandler()
 
-const findBy = compose(find, whereEq)
+const findBy = R.compose(L.find, R.whereEq)
+const flip = () => L.set("isFlipped", true)
+const unflip = () => L.set("isFlipped", false)
+const next = () => L.modify("current", R.inc)
 
-const flip = compose(set("isFlipped"), T)
-const unflip = compose(set("isFlipped"), F)
-const next = compose(modify("current"), always(inc))
-
-const noIdea = compose(
-  L.assign(
-    choose(state => [
-      "decks",
-      findBy({ name: get("deck", state) }),
-      "cards",
-      findBy({ id: get("current", state) })
-    ])
-  ),
-  always(supermemo(5))
-)
+const answer = ({ grade, cardLens }) =>
+  L.modify(
+    cardLens,
+    R.converge(R.merge, [R.identity, supermemo(grade)])
+  )
 
 const eventMap = [
-  onFlip$.map(flip),
-  onNoIdea$
-    .withLatestFrom(store$, nthArg(1))
-    .map(converge(compose, [next, unflip, noIdea])),
-  onMaybe$.map(converge(compose, [next, unflip])),
-  onTooEasy$.map(converge(compose, [next, unflip]))
+  onAnswer$.map(
+    R.converge(R.compose, [next, unflip, answer])
+  ),
+  onFlip$.map(flip)
 ]
 
 const shutdown = run(eventMap)
@@ -105,36 +71,53 @@ const handlers = {
   onFlip
 }
 
+const getCurrent = L.get(["state", "current"])
+const getDeck = L.get(["url", "query", "deck"])
+const hasDecks = L.get(["state", "decks", "length"])
+const makeDeckLens = name =>
+  L.choose(() => ["decks", findBy({ name }), "cards"])
+
+const makeCardLens = (deckLens, id) => [
+  deckLens,
+  findBy({ id })
+]
+
+const makeNextCardLens = (deckLens, id) => [
+  deckLens,
+  L.find(
+    card =>
+      card.id > id && compareAsc(card.date, startOfToday())
+  )
+]
+
 const anki = mapPropsStream(props$ =>
   props$
+    .filter(getDeck)
     .combineLatest(store$, (props, state) => ({
       ...props,
       state,
       handlers
     }))
+    .filter(hasDecks)
     .finally(shutdown)
 )
 
 export default anki(props => {
-  const state = get("state", props)
-  console.log(state)
-  const handlers = get("handlers", props)
+  const id = getCurrent(props)
+  const name = getDeck(props)
 
-  const current = get("current", state)
-  const cards = get(
-    ["decks", findBy({ name: "redux" }), "cards"],
-    state
-  )
+  const deckLens = makeDeckLens(name)
+  const cardLens = makeCardLens(deckLens, id)
+  const nextLens = makeNextCardLens(deckLens, id)
 
-  const currentCard = get(findBy({ id: current }), cards)
+  const deck = L.get(["state", deckLens], props)
+  const card = L.get(["state", cardLens], props)
+  const nextCard = L.get(["state", nextLens], props)
 
-  const slug = get("slug", currentCard)
-  const question = get("question", currentCard)
-  const answer = get("answer", currentCard)
-  const isFlipped = get("isFlipped", state)
+  const { question, answer } = card
 
-  const onNext = get("onNext", handlers)
-  const onFlip = get("onFlip", handlers)
+  const isFlipped = L.get(["state", "isFlipped"], props)
+  const { onNext, onFlip } = L.get("handlers", props)
 
   return (
     <div>
@@ -157,21 +140,28 @@ export default anki(props => {
           <h3>{answer}</h3>
           <button
             className="background-danger"
-            onClick={onNoIdea}
+            onClick={() =>
+              onAnswer({
+                grade: 0,
+                deckLens,
+                cardLens
+              })}
           >
             😭 No idea
           </button>
 
           <button
             className="background-warning"
-            onClick={onMaybe}
+            onClick={() =>
+              onAnswer({ grade: 3, lens: cardLens })}
           >
             🤔 Maybe?
           </button>
 
           <button
             className="background-success"
-            onClick={onTooEasy}
+            onClick={() =>
+              onAnswer({ grade: 5, lens: cardLens })}
           >
             😁 Too easy!
           </button>

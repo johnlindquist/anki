@@ -1,15 +1,14 @@
-const {
-  startOfToday,
-  addDays,
-  compareAsc
-} = require("date-fns")
+import { startOfToday, addDays, compareAsc } from "date-fns"
 
-export default (grade, factor = 0, reps = 0) => {
+import * as R from "ramda"
+
+const supermemo = grade => ({ factor = 0, reps = 0 }) => {
   const MAX_GRADE = 5
 
-  //0 or 1: No idea.. or Maybe?.
+  //0 or 1: No idea..
   if (grade < 3) {
     return {
+      grade,
       factor, //same factor
       reps: 0, //reset reps
       interval: 0, //reset interval
@@ -17,7 +16,7 @@ export default (grade, factor = 0, reps = 0) => {
     }
   }
 
-  //2: Got it
+  //2: Maybe?
   const calculatedFactor = +(factor +
     (0.1 -
       (MAX_GRADE - grade) *
@@ -30,6 +29,7 @@ export default (grade, factor = 0, reps = 0) => {
   const newReps = reps + 1
   if (grade == 3) {
     return {
+      grade,
       factor: newFactor, //calculate factor
       reps: reps + 1, //increment reps
       interval: 0, //reset interval
@@ -45,9 +45,12 @@ export default (grade, factor = 0, reps = 0) => {
   })(newReps, newFactor)
 
   return {
+    grade,
     factor: newFactor, //calculate factor
     reps: reps + 1, //increment reps
     interval: newInterval, //calculate interval
     date: addDays(startOfToday(), newInterval) //add interval to date
   }
 }
+
+export default R.curry(supermemo)
