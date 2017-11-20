@@ -14,7 +14,7 @@ const state = {
   isFlipped: false
 }
 
-const storeDecks = R.compose(L.set("decks"), R.identity)
+const storeDecks = decks => L.set("decks", decks)
 
 const decks$ = request({
   url: DATA_URL,
@@ -23,9 +23,9 @@ const decks$ = request({
 
 export const store$ = new BehaviorSubject(state)
   .scan((state, fn) => fn(state))
-  // .distinctUntilChanged()
-  .do(state => console.log({ state }))
+  .distinctUntilChanged()
   .shareReplay(1)
+  .do(state => console.log({ state }))
 
 export const storeNext = R.bind(store$.next, store$)
 

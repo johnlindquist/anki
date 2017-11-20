@@ -14,7 +14,11 @@ import * as R from "ramda"
 
 import supermemo from "../utils/supermemo"
 import { store$, run } from "../components/store"
-import { compareAsc, startOfToday } from "date-fns"
+import {
+  compareAsc,
+  startOfToday,
+  differenceInDays
+} from "date-fns"
 
 const log = R.bind(console.log, console)
 const tapLog = R.tap(log)
@@ -25,148 +29,208 @@ const {
 } = createEventHandler()
 
 const {
-  handler: onNoIdea,
-  stream: onNoIdea$
-} = createEventHandler()
-
-const {
   handler: onAnswer,
   stream: onAnswer$
 } = createEventHandler()
 
-const {
-  handler: onMaybe,
-  stream: onMaybe$
-} = createEventHandler()
-
-const {
-  handler: onTooEasy,
-  stream: onTooEasy$
-} = createEventHandler()
+const flipper$ = Observable.merge(
+  onFlip$.mapTo(true),
+  onAnswer$.mapTo(false)
+).startWith(false)
 
 const findBy = R.compose(L.find, R.whereEq)
-const flip = () => L.set("isFlipped", true)
-const unflip = () => L.set("isFlipped", false)
 const next = () => L.modify("current", R.inc)
 
 const answer = ({ grade, cardLens }) =>
   L.modify(
     cardLens,
-    R.converge(R.merge, [R.identity, supermemo(grade)])
+    R.chain(R.flip(R.merge), supermemo(grade))
   )
 
-const eventMap = [
-  onAnswer$.map(
-    R.converge(R.compose, [next, unflip, answer])
-  ),
-  onFlip$.map(flip)
-]
+const eventMap = [onAnswer$.map(answer)]
 
 const shutdown = run(eventMap)
 
-const handlers = {
-  onNoIdea,
-  onMaybe,
-  onTooEasy,
-  onFlip
-}
-
-const getCurrent = L.get(["state", "current"])
 const getDeck = L.get(["url", "query", "deck"])
-const hasDecks = L.get(["state", "decks", "length"])
 const makeDeckLens = name =>
   L.choose(() => ["decks", findBy({ name }), "cards"])
 
-const makeCardLens = (deckLens, id) => [
-  deckLens,
-  findBy({ id })
-]
+const makeDealtLens = name =>
+  L.choose(() => [
+    "decks",
+    findBy({ name }),
+    "cards",
+    L.filter(
+      card =>
+        compareAsc(startOfToday(), new Date(card.date)) == 1
+    )
+  ])
 
-const makeNextCardLens = (deckLens, id) => [
-  deckLens,
-  L.find(
-    card =>
-      card.id > id && compareAsc(card.date, startOfToday())
-  )
-]
+const makeCardLens = deckLens => {
+  return [
+    deckLens,
+    L.find(card => {
+      const result = compareAsc(
+        startOfToday(),
+        new Date(card.date)
+      )
+      return result == 1
+    })
+  ]
+}
 
-const anki = mapPropsStream(props$ =>
+const hasDecks = L.get(["decks", "length"])
+
+const gradeCard = (deckLens, cardLens) => grade =>
+  onAnswer({
+    grade,
+    deckLens,
+    cardLens
+  })
+
+const prepareProps = (props, state) => {
+  const deckName = getDeck(props)
+
+  const deckLens = makeDeckLens(deckName)
+  const dealtLens = makeDealtLens(deckName)
+  const cardLens = makeCardLens(deckLens)
+
+  const deck = L.get(deckLens, state)
+  const dealt = L.get(dealtLens, state)
+  const card = L.get(cardLens, state)
+
+  const grade = gradeCard(deckLens, cardLens)
+
+  const onNoIdea = () => grade(0)
+
+  const onMaybe = () => grade(3)
+
+  const onTooEasy = () => grade(5)
+
+  return {
+    ...props,
+    onFlip,
+    onNoIdea,
+    onMaybe,
+    onTooEasy,
+    deck,
+    card
+  }
+}
+
+//const flipCard = (props, isFlipped) => ({...props, isFlipped})
+const flipCard = R.flip(L.set("isFlipped"))
+
+const mapStream = mapPropsStream(props$ =>
   props$
+    .combineLatest(flipper$, flipCard)
     .filter(getDeck)
-    .combineLatest(store$, (props, state) => ({
-      ...props,
-      state,
-      handlers
-    }))
-    .filter(hasDecks)
+    .combineLatest(store$.filter(hasDecks), prepareProps)
     .finally(shutdown)
 )
 
-export default anki(props => {
-  const id = getCurrent(props)
-  const name = getDeck(props)
+const Question = ({ question, onFlip }) => (
+  <div>
+    <button className="background-success" onClick={onFlip}>
+      Flip
+    </button>
+    <h2>{question}</h2>
+  </div>
+)
 
-  const deckLens = makeDeckLens(name)
-  const cardLens = makeCardLens(deckLens, id)
-  const nextLens = makeNextCardLens(deckLens, id)
+const Answer = ({
+  answer,
+  onNoIdea,
+  onMaybe,
+  onTooEasy
+}) => (
+  <div>
+    <button
+      className="background-danger"
+      onClick={onNoIdea}
+    >
+      😭 No idea
+    </button>
 
-  const deck = L.get(["state", deckLens], props)
-  const card = L.get(["state", cardLens], props)
-  const nextCard = L.get(["state", nextLens], props)
+    <button
+      className="background-warning"
+      onClick={onMaybe}
+    >
+      🤔 Maybe?
+    </button>
 
-  const { question, answer } = card
+    <button
+      className="background-success"
+      onClick={onTooEasy}
+    >
+      😁 Too easy!
+    </button>
+    <h3>{answer}</h3>
+  </div>
+)
 
-  const isFlipped = L.get(["state", "isFlipped"], props)
-  const { onNext, onFlip } = L.get("handlers", props)
+const DebugDeck = ({ deck, card: { id } }) => {
+  return (
+    <div className="row">
+      {R.map(card => {
+        const difference = differenceInDays(
+          new Date(card.date),
+          startOfToday()
+        )
 
+        const dayDifference =
+          difference < 0 ? 0 : difference
+        return (
+          <div
+            className={`padding-large ${card.id == id
+              ? "border border-primary"
+              : ""}`}
+            key={card.id}
+          >
+            <div>Reps: {card.reps}</div>
+            <div>Factor: {card.factor}</div>
+            <div>Grade: {card.grade}</div>
+            <div>Days until: {dayDifference}</div>
+          </div>
+        )
+      }, deck)}
+    </div>
+  )
+}
+
+const QuizComponent = ({
+  deck,
+  card,
+  isFlipped,
+  onFlip,
+  onNoIdea,
+  onMaybe,
+  onTooEasy
+}) => {
   return (
     <div>
       <Head />
       <Link href={{ pathname: "/" }}>
         <a>Home</a>
       </Link>
+      <hr />
       {!isFlipped ? (
-        <div>
-          <h2>{question}</h2>
-          <button
-            className="background-primary"
-            onClick={onFlip}
-          >
-            Flip
-          </button>
-        </div>
+        <Question
+          question={card.question}
+          onFlip={onFlip}
+        />
       ) : (
-        <div>
-          <h3>{answer}</h3>
-          <button
-            className="background-danger"
-            onClick={() =>
-              onAnswer({
-                grade: 0,
-                deckLens,
-                cardLens
-              })}
-          >
-            😭 No idea
-          </button>
-
-          <button
-            className="background-warning"
-            onClick={() =>
-              onAnswer({ grade: 3, lens: cardLens })}
-          >
-            🤔 Maybe?
-          </button>
-
-          <button
-            className="background-success"
-            onClick={() =>
-              onAnswer({ grade: 5, lens: cardLens })}
-          >
-            😁 Too easy!
-          </button>
-        </div>
+        <Answer
+          answer={card.answer}
+          onNoIdea={onNoIdea}
+          onMaybe={onMaybe}
+          onTooEasy={onTooEasy}
+        />
       )}
+
+      <DebugDeck deck={deck} card={card} />
     </div>
   )
-})
+}
+
+export default mapStream(QuizComponent)
