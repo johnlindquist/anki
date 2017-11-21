@@ -22,6 +22,9 @@ import {
 
 const log = R.bind(console.log, console)
 const tapLog = R.tap(log)
+import DebugDeck from "../components/debugDeck"
+import Answer from "../components/answer"
+import Question from "../components/question"
 
 const {
   handler: onFlip,
@@ -39,7 +42,6 @@ const flipper$ = Observable.merge(
 ).startWith(false)
 
 const findBy = R.compose(L.find, R.whereEq)
-const next = () => L.modify("current", R.inc)
 
 const answer = ({ grade, cardLens }) =>
   L.modify(
@@ -113,7 +115,7 @@ const prepareProps = (props, state) => {
     onNoIdea,
     onMaybe,
     onTooEasy,
-    deck,
+    deck: dealt,
     card
   }
 }
@@ -124,79 +126,23 @@ const flipCard = R.flip(L.set("isFlipped"))
 const mapStream = mapPropsStream(props$ =>
   props$
     .combineLatest(flipper$, flipCard)
+    .do(log)
     .filter(getDeck)
     .combineLatest(store$.filter(hasDecks), prepareProps)
     .finally(shutdown)
-)
-
-const Question = ({ question, onFlip }) => (
-  <div>
-    <button className="background-success" onClick={onFlip}>
-      Flip
-    </button>
-    <h2>{question}</h2>
-  </div>
-)
-
-const Answer = ({
-  answer,
-  onNoIdea,
-  onMaybe,
-  onTooEasy
-}) => (
-  <div>
-    <button
-      className="background-danger"
-      onClick={onNoIdea}
-    >
-      😭 No idea
-    </button>
-
-    <button
-      className="background-warning"
-      onClick={onMaybe}
-    >
-      🤔 Maybe?
-    </button>
-
-    <button
-      className="background-success"
-      onClick={onTooEasy}
-    >
-      😁 Too easy!
-    </button>
-    <h3>{answer}</h3>
-  </div>
-)
-
-const DebugDeck = ({ deck, card: { id } }) => {
-  return (
-    <div className="row">
-      {R.map(card => {
-        const difference = differenceInDays(
-          new Date(card.date),
-          startOfToday()
+    .startWith({})
+    .pairwise()
+    .map(([prev, curr]) => {
+      if (prev.deck && curr.isFlipped) {
+        log({ deck: prev.deck, card: prev.card })
+        const deck = prev.deck.filter(
+          c => c.id != prev.card.id
         )
-
-        const dayDifference =
-          difference < 0 ? 0 : difference
-        return (
-          <div
-            className={`padding-large ${card.id == id
-              ? "border border-primary"
-              : ""}`}
-            key={card.id}
-          >
-            <div>Reps: {card.reps}</div>
-            <div>Factor: {card.factor}</div>
-            <div>Grade: {card.grade}</div>
-            <div>Days until: {dayDifference}</div>
-          </div>
-        )
-      }, deck)}
-    </div>
-  )
-}
+        return { ...curr, deck }
+      }
+      return curr
+    })
+)
 
 const QuizComponent = ({
   deck,
@@ -213,20 +159,25 @@ const QuizComponent = ({
       <Link href={{ pathname: "/" }}>
         <a>Home</a>
       </Link>
+      <Link href={{ pathname: "/summary" }}>
+        <a>Summary</a>
+      </Link>
       <hr />
-      {!isFlipped ? (
-        <Question
-          question={card.question}
-          onFlip={onFlip}
-        />
-      ) : (
-        <Answer
-          answer={card.answer}
-          onNoIdea={onNoIdea}
-          onMaybe={onMaybe}
-          onTooEasy={onTooEasy}
-        />
-      )}
+      <div className="card">
+        {!isFlipped ? (
+          <Question
+            question={card.question}
+            onFlip={onFlip}
+          />
+        ) : (
+          <Answer
+            answer={card.answer}
+            onNoIdea={onNoIdea}
+            onMaybe={onMaybe}
+            onTooEasy={onTooEasy}
+          />
+        )}
+      </div>
 
       <DebugDeck deck={deck} card={card} />
     </div>

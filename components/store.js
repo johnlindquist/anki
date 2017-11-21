@@ -6,12 +6,7 @@ import { request } from "universal-rxjs-ajax"
 const DATA_URL = "https://anki-data.johnlindquist.com/decks"
 
 const state = {
-  query: {
-    deck: "redux"
-  },
-  decks: [],
-  current: 0,
-  isFlipped: false
+  decks: []
 }
 
 const storeDecks = decks => L.set("decks", decks)
