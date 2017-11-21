@@ -1,4 +1,5 @@
 import * as R from "ramda"
+import * as L from "partial.lenses"
 
 import {
   compareAsc,
@@ -6,7 +7,8 @@ import {
   differenceInDays
 } from "date-fns"
 
-export default ({ deck }) => {
+export default ({ deck, card }) => {
+  const id = L.get("id", card)
   return (
     <div className="row">
       {R.map(card => {
@@ -20,11 +22,13 @@ export default ({ deck }) => {
         return (
           <div
             style={{ width: "10rem" }}
-            className={`card background-${{
+            className={`col padding-small background-${{
               0: "danger",
               3: "warning",
               5: "success"
-            }[card.grade]}`}
+            }[card.grade]} ${id == card.id
+              ? " border border-primary "
+              : ""}`}
           >
             <div>Q: {card.question}</div>
             <div>Reps: {card.reps}</div>
