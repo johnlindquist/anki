@@ -1,7 +1,7 @@
 export default ({ question, onFlip }) => (
-  <div style={{ height: "18rem" }} className="card-body">
+  <div style={{ height: "18rem" }}>
     <h2>{question}</h2>
-    <div className="card-footer">
+    <div>
       <button
         className="background-success"
         onClick={onFlip}

@@ -4,10 +4,10 @@ export default ({
   onMaybe,
   onTooEasy
 }) => (
-  <div style={{ height: "18rem" }} className="card-body">
+  <div style={{ height: "18rem" }}>
     <h3>{answer}</h3>
 
-    <div className="card-footer">
+    <div>
       <button
         className="background-danger"
         onClick={onNoIdea}

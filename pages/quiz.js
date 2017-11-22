@@ -13,7 +13,7 @@ import * as L from "partial.lenses"
 import * as R from "ramda"
 
 import supermemo from "../utils/supermemo"
-import { store$, run } from "../components/store"
+import { store$, updateCard } from "../components/store"
 import * as DF from "date-fns"
 
 const log = R.bind(console.log, console)
@@ -21,6 +21,7 @@ const tapLog = R.tap(log)
 import DebugDeck from "../components/debugDeck"
 import Answer from "../components/answer"
 import Question from "../components/question"
+import Nav from "../components/nav"
 
 const {
   handler: onFlip,
@@ -40,68 +41,51 @@ const flipper$ = Observable.merge(
   .startWith({ isFlipped: false })
 
 const findBy = R.compose(L.find, R.whereEq)
+const filterBy = R.compose(L.find, R.whereEq)
 
-const answer = ({ grade, cardLens }) =>
-  L.modify(
-    cardLens,
-    R.chain(R.flip(R.merge), supermemo(grade))
-  )
-
-const eventMap = [onAnswer$.map(answer)]
-
-const shutdown = run(eventMap)
+const onAnswerUnsub = onAnswer$.map(updateCard).subscribe()
 
 const getDeck = L.get(["url", "query", "deck"])
-const makeDeckLens = name =>
-  L.choose(() => ["decks", findBy({ name }), "cards"])
 
-const makeDealtLens = name =>
-  L.choose(() => [
-    "decks",
-    findBy({ name }),
-    "cards",
-    L.filter(card => {
-      return (
-        DF.compareAsc(
-          DF.startOfToday(),
-          new Date(card.date)
-        ) > -1
-      )
-    })
-  ])
+const hasDecksAndCards = R.converge(R.and, [
+  L.get(["decks", "length"]),
+  L.get(["cards", "length"])
+])
 
-const makeCardLens = deckLens => {
-  return [
-    deckLens,
-    L.find(card => {
-      const result = DF.compareAsc(
-        DF.startOfToday(),
-        new Date(card.date)
-      )
-      return result == 1
-    })
-  ]
-}
-
-const hasDecks = L.get(["decks", "length"])
-
-const gradeCard = (card, cardLens) => grade =>
+const gradeCard = (deckName, card) => grade =>
   onAnswer({
     grade,
-    card,
-    cardLens
+    card: { ...card, ...supermemo(grade)(card) },
+    deckName
   })
 
 const prepareProps = (props, state) => {
-  const deckName = getDeck(props)
   const graded = L.get("graded", props)
 
-  const deckLens = makeDeckLens(deckName)
-  const dealtLens = makeDealtLens(deckName)
-  const cardLens = makeCardLens(deckLens)
+  const deckName = getDeck(props)
+  const deck = L.get(
+    ["decks", L.find(R.whereEq({ name: deckName }))],
+    state
+  )
+  const deckId = L.get("id", deck)
 
-  const deck = L.get(deckLens, state)
-  const dealt = L.get(dealtLens, state)
+  const cards = L.get(
+    ["cards", L.filter(R.whereEq({ deckId }))],
+    state
+  )
+  const dealt = L.get(
+    [
+      L.filter(card => {
+        return (
+          DF.compareAsc(
+            DF.startOfToday(),
+            new Date(card.date)
+          ) > -1
+        )
+      })
+    ],
+    cards
+  )
 
   const remaining = R.differenceWith(
     R.eqProps("id"),
@@ -111,7 +95,7 @@ const prepareProps = (props, state) => {
 
   const card = remaining[0]
 
-  const grade = gradeCard(card, cardLens)
+  const grade = gradeCard(deckName, card)
 
   const onNoIdea = () => grade(0)
 
@@ -126,6 +110,7 @@ const prepareProps = (props, state) => {
     onMaybe,
     onTooEasy,
     deck,
+    cards,
     card
   }
 }
@@ -134,7 +119,6 @@ const graded$ = onAnswer$
   .pluck("card")
   .startWith({ graded: [] })
   .scan(R.flip(L.set(["graded", L.append])))
-  .do(log)
 
 const local$ = Observable.combineLatest(
   flipper$,
@@ -145,12 +129,15 @@ const mapStream = mapPropsStream(props$ =>
   props$
     .filter(getDeck)
     .combineLatest(local$, R.merge)
-    .combineLatest(store$.filter(hasDecks), prepareProps)
-    .finally(shutdown)
+    .combineLatest(
+      store$.filter(hasDecksAndCards),
+      prepareProps
+    )
 )
 
 const QuizComponent = ({
   deck,
+  cards,
   card,
   isFlipped,
   onFlip,
@@ -160,13 +147,7 @@ const QuizComponent = ({
 }) => {
   return (
     <div>
-      <Head />
-      <Link href={{ pathname: "/" }}>
-        <a>Home</a>
-      </Link>
-      <Link href={{ pathname: "/summary" }}>
-        <a>Summary</a>
-      </Link>
+      <Nav />
       <hr />
       <div className="card">
         {!isFlipped ? (
@@ -184,7 +165,7 @@ const QuizComponent = ({
         )}
       </div>
 
-      <DebugDeck deck={deck} card={card} />
+      <DebugDeck cards={cards} card={card} />
     </div>
   )
 }

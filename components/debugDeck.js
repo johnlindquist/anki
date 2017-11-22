@@ -7,7 +7,7 @@ import {
   differenceInDays
 } from "date-fns"
 
-export default ({ deck, card }) => {
+export default ({ cards, card }) => {
   const id = L.get("id", card)
   return (
     <div className="row">
@@ -21,6 +21,7 @@ export default ({ deck, card }) => {
           difference < 0 ? 0 : difference
         return (
           <div
+            key={card.id}
             style={{ width: "10rem" }}
             className={`col padding-small background-${{
               0: "danger",
@@ -37,7 +38,7 @@ export default ({ deck, card }) => {
             <div>Days until: {dayDifference}</div>
           </div>
         )
-      }, deck)}
+      }, cards)}
     </div>
   )
 }

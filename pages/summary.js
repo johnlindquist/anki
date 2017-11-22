@@ -1,24 +1,22 @@
 import { store$ } from "../components/store"
 import Head from "../components/head"
+import Nav from "../components/nav"
 import Link from "next/link"
 import { mapPropsStream } from "recompose"
 import * as R from "ramda"
 import * as L from "partial.lenses"
 import DebugDeck from "../components/debugDeck"
 
-const getDeckLens = L.get([
-  "decks",
-  L.find(R.whereEq({ name: "redux" })),
-  "cards"
-])
-
 const hasDecks = L.get(["decks", "length"])
 
 const prepareProps = (props, state) => {
-  const deck = getDeckLens(state)
+  const cards = L.get([
+    "cards",
+    L.filter(R.whereEq({ deckId: 0 }))
+  ])(state)
   return {
     ...props,
-    deck
+    cards
   }
 }
 
@@ -29,18 +27,10 @@ const stream$ = mapPropsStream(props$ =>
   )
 )
 
-const Page = ({ deck }) => (
+const Page = ({ cards }) => (
   <div>
-    <Head />
-    <Link href={{ pathname: "/" }}>
-      <a>Home</a>
-    </Link>
-    <Link
-      href={{ pathname: "/quiz", query: { deck: "redux" } }}
-    >
-      <a>Redux</a>
-    </Link>
-    <DebugDeck deck={deck} />
+    <Nav />
+    <DebugDeck cards={cards} />
   </div>
 )
 

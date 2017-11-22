@@ -1,6 +1,7 @@
 import { store$ } from "../components/store"
 import Head from "../components/head"
 import Link from "next/link"
+import Nav from "../components/nav"
 import { mapPropsStream } from "recompose"
 import * as R from "ramda"
 import * as L from "partial.lenses"
@@ -33,8 +34,7 @@ const Page = props => {
   const decks = L.get(["decks", L.defaults([])], state)
   return (
     <div>
-      <Head />
-      <button className="">Add Deck</button>
+      <Nav />
       <h1>Anki App</h1>
       {displayDeckButtons(decks)}
     </div>

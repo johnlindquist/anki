@@ -45,10 +45,10 @@ const supermemo = grade => ({ factor = 0, reps = 0 }) => {
   })(newReps, newFactor)
 
   return {
-    grade,
-    factor: newFactor, //calculate factor
-    reps: reps + 1, //increment reps
-    interval: newInterval, //calculate interval
+    grade: Number(grade),
+    factor: Number(newFactor), //calculate factor
+    reps: Number(reps + 1), //increment reps
+    interval: Number(newInterval), //calculate interval
     date: addDays(startOfToday(), newInterval) //add interval to date
   }
 }

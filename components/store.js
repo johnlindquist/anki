@@ -1,30 +1,62 @@
-import { BehaviorSubject, Observable } from "rxjs"
+import { BehaviorSubject, Observable, Subject } from "rxjs"
 import * as R from "ramda"
 import * as L from "partial.lenses"
 import { request } from "universal-rxjs-ajax"
 
-const DATA_URL = "https://anki-data.johnlindquist.com/decks"
+const log = R.bind(console.log, console)
+
+const ENDPOINT = "http://localhost:3002/"
 
 const state = {
-  decks: []
+  decks: [],
+  cards: []
 }
 
-const storeDecks = decks => L.set("decks", decks)
-
 const decks$ = request({
-  url: DATA_URL,
+  url: `${ENDPOINT}decks`,
   method: "GET"
-}).pluck("response")
+})
+  .pluck("response")
+  .map(R.objOf("decks"))
+
+const cards$ = request({
+  url: `${ENDPOINT}cards`,
+  method: "GET"
+})
+  .pluck("response")
+  .map(R.objOf("cards"))
+
+const loadedData$ = Observable.zip(decks$, cards$)
+  .map(R.mergeAll)
+  .map(data => state => ({ ...state, ...data }))
+
+export const dispatcher$ = new Subject()
+
+//TODO: Refactor to `createEventHandler`
+const putter$ = new Subject()
+  .switchMap(({ deckName, card }) => {
+    return request({
+      url: `${ENDPOINT}cards/${card.id}`,
+      method: "PATCH",
+      body: card,
+      dataType: "json",
+      contentType: "application/json"
+    })
+  })
+  .pluck("response")
+  .map(card =>
+    L.assign(
+      ["cards", L.find(R.whereEq({ id: card.id }))],
+      card
+    )
+  )
 
 export const store$ = new BehaviorSubject(state)
+  .merge(loadedData$, dispatcher$, putter$)
   .scan((state, fn) => fn(state))
-  .distinctUntilChanged()
   .shareReplay(1)
   .do(state => console.log({ state }))
 
-export const storeNext = R.bind(store$.next, store$)
-
-export const run = streams =>
-  Observable.merge(...streams).subscribe(storeNext)
-
-run([decks$.map(storeDecks)])
+export const updateCard = ({ deckName, card }) => {
+  putter$.next({ deckName, card })
+}
